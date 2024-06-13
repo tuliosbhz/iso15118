@@ -37,7 +37,8 @@ class EVCCConfig(BaseModel):
     use_tls: Optional[bool] = Field(True, alias="useTls")
     # How often shall SDP (SECC Discovery Protocol) retries happen before reverting
     # to using nominal duty cycle PWM-based charging?
-    sdp_retry_cycles: Optional[int] = Field(1, alias="sdpRetryCycles")
+    # Manual changes do it by Tulio Soares from 1 to 50 retry cycles
+    sdp_retry_cycles: Optional[int] = Field(100, alias="sdpRetryCycles")
     # For ISO 15118-20 only
     # Maximum amount of contract certificates (and associated certificate chains)
     # the EV can store. That value is used in the CertificateInstallationReq.
@@ -70,7 +71,7 @@ class EVCCConfig(BaseModel):
     max_supporting_points: Optional[int] = Field(1024, alias="maxSupportingPoints")
 
     # charge cycle count
-    charge_loop_cycle: Optional[int] = Field(10, alias="chargeLoopCycle")
+    charge_loop_cycle: Optional[int] = Field(4, alias="chargeLoopCycle")
 
     def load_raw_values(self):
         # conversion of list of strings to enum types.

@@ -142,9 +142,17 @@ from iso15118.shared.security import (
 )
 from iso15118.shared.states import Base64, Pause, State, Terminate
 
+from iso15118.shared.messages.enums import UnitSymbol
+from iso15118.shared.messages.iso15118_2.datatypes import (
+    SAScheduleTuple, PVPMax, PMaxScheduleEntry, RelativeTimeInterval,
+    PMaxSchedule, SalesTariff, SalesTariffEntry
+)
+
 logger = logging.getLogger(__name__)
 
+import uuid
 
+from iso15118.shared.ocpp_to_iso_schedule import convert_ocpp_to_iso15118_schedule
 # ============================================================================
 # |     COMMON SECC STATES (FOR BOTH AC AND DC CHARGING) - ISO 15118-2       |
 # ============================================================================
@@ -216,6 +224,12 @@ class SessionSetup(StateSECC):
             session_setup_req.evcc_id
         )
         self.comm_session.session_id = session_id
+
+
+        self.comm_session.ocpp_client.transaction_id = session_id
+        self.comm_session.ocpp_client.evse_id = int(self.comm_session.evse_id[-4:])
+
+        await self.comm_session.ocpp_client.send_transaction_event()
 
         self.create_next_message(
             ServiceDiscovery,
@@ -1135,6 +1149,7 @@ class Authorization(StateSECC):
 
         if not msg:
             return
+        
 
         authorization_req: AuthorizationReq = msg.body.authorization_req
 
@@ -1187,11 +1202,13 @@ class Authorization(StateSECC):
         id_token = (
             self.comm_session.emaid
             if self.comm_session.selected_auth_option == AuthEnum.PNC_V2
-            else None
+            else uuid.uuid4()
         )
+        #Added by Tulio: To ask for the authorization from the OCPP server
+        is_ocpp_authorized = await self.comm_session.ocpp_client.send_authorize()
+        
         # note that the certificate_chain and hashed_data are empty here
         # as they were already send previously in the PaymentDetails state
-
         response_code: Optional[
             Union[ResponseCodeV2, ResponseCodeV20, ResponseCodeDINSPEC]
         ] = ResponseCode.OK
@@ -1236,10 +1253,10 @@ class Authorization(StateSECC):
                 == AuthorizationStatus.ACCEPTED
             ):
                 self.authorization_complete = True
-
         if (
             self.authorization_complete
             and self.comm_session.evse_controller.ready_to_charge()
+            and is_ocpp_authorized
         ):
             auth_status = EVSEProcessing.FINISHED
             next_state = ChargeParameterDiscovery
@@ -1384,53 +1401,62 @@ class ChargeParameterDiscovery(StateSECC):
         departure_time = (
             ev_data_context.departure_time if ev_data_context.departure_time else 0
         )
-        sa_schedule_list = await self.comm_session.evse_controller.get_sa_schedule_list(
-            ev_data_context,
-            self.comm_session.config.free_charging_service,
-            max_schedule_entries,
-            departure_time,
-        )
 
-        sa_schedule_list_valid = self.validate_sa_schedule_list(
-            sa_schedule_list, departure_time
-        )
+        #Send NotifyEVChargingNeeds to obtain an chargingprofile
+        await self.comm_session.ocpp_client.update_ev_charging_needs(eAmount=ev_data_context.target_energy_request,
+                                                    departureTime=ev_data_context.departure_time,
+                                                    max_schedule_tuples=max_schedule_entries, #TODO: Insert automatically here
+                                                    evMinCurrent=ev_data_context.rated_limits.ac_limits.min_charge_current,
+                                                    evMaxCurrent=ev_data_context.rated_limits.ac_limits.max_charge_current,
+                                                    evMaxVoltage=ev_data_context.rated_limits.ac_limits.max_voltage)
+        await self.comm_session.ocpp_client.send_notify_ev_charging_needs()
 
-        if (
-            sa_schedule_list_valid
-            and self.comm_session.ev_session_context.sa_schedule_tuple_id
-        ):
-            filtered_list = list(
-                filter(
-                    lambda schedule_entry: schedule_entry.sa_schedule_tuple_id
-                    == self.comm_session.ev_session_context.sa_schedule_tuple_id,
-                    sa_schedule_list,
-                )
-            )
-            if len(filtered_list) != 1:
-                logger.warning(
-                    f"Resumed session. Previously selected sa_schedule_list is"
-                    f" not present {sa_schedule_list}"
-                )
+        if self.comm_session.ocpp_client.charging_profile: 
+            if self.comm_session.ocpp_client.charging_profile:
+                        schedule_tuple = convert_ocpp_to_iso15118_schedule(self.comm_session.ocpp_client.charging_profile)
+                        self.comm_session.evse_controller.sa_schedule_list = [schedule_tuple]
+                        sa_schedule_list = [schedule_tuple]
             else:
-                logger.info(
-                    f"Resumed session. SAScheduleTupleID "
-                    f"{self.comm_session.ev_session_context.sa_schedule_tuple_id} "
-                    f"present in context"
-                )
-
-        if not sa_schedule_list_valid:
-            # V2G2-305 : It is still acceptable if the sum of the schedule entry
-            # durations falls short of departure_time requested by the EVCC in
-            # ChargeParameterDiscoveryReq - EVCC could still request a new schedule
-            # when it is on the last entry of the selected schedule.
-            logger.warning(
-                f"validate_sa_schedule_list() failed. departure_time: {departure_time} "
-                f" {sa_schedule_list}"
+                sa_schedule_list = None
+        
+        if sa_schedule_list:
+            sa_schedule_list_valid = self.validate_sa_schedule_list(
+                sa_schedule_list, departure_time
             )
 
-        signature = None
-        next_state: Type[State] = None
-        if sa_schedule_list:
+            if (
+                sa_schedule_list_valid
+                and self.comm_session.ev_session_context.sa_schedule_tuple_id
+            ):
+                filtered_list = list(
+                    filter(
+                        lambda schedule_entry: schedule_entry.sa_schedule_tuple_id
+                        == self.comm_session.ev_session_context.sa_schedule_tuple_id,
+                        sa_schedule_list,
+                    )
+                )
+                if len(filtered_list) != 1:
+                    logger.warning(
+                        f"Resumed session. Previously selected sa_schedule_list is"
+                        f" not present {sa_schedule_list}"
+                    )
+                else:
+                    logger.info(
+                        f"Resumed session. SAScheduleTupleID "
+                        f"{self.comm_session.ev_session_context.sa_schedule_tuple_id} "
+                        f"present in context"
+                    )
+
+            if not sa_schedule_list_valid:
+                # V2G2-305 : It is still acceptable if the sum of the schedule entry
+                # durations falls short of departure_time requested by the EVCC in
+                # ChargeParameterDiscoveryReq - EVCC could still request a new schedule
+                # when it is on the last entry of the selected schedule.
+                logger.warning(
+                    f"validate_sa_schedule_list() failed. departure_time: {departure_time} "
+                    f" {sa_schedule_list}"
+                )
+
             self.comm_session.offered_schedules = sa_schedule_list
             if charge_params_req.ac_ev_charge_parameter:
                 next_state = PowerDelivery
@@ -1469,12 +1495,17 @@ class ChargeParameterDiscovery(StateSECC):
         else:
             self.expecting_charge_parameter_discovery_req = True
 
+        signature = None
+        next_state: Type[State] = None
+
         charge_params_res = ChargeParameterDiscoveryRes(
             response_code=ResponseCode.OK,
             evse_processing=EVSEProcessing.FINISHED
             if sa_schedule_list
             else EVSEProcessing.ONGOING,
-            sa_schedule_list=SAScheduleList(schedule_tuples=sa_schedule_list),
+            sa_schedule_list=SAScheduleList(schedule_tuples=sa_schedule_list)            
+            if sa_schedule_list
+            else SAScheduleList(schedule_tuples=[self.create_empty_sa_schedule_tuple()]),
             ac_charge_parameter=ac_evse_charge_params,
             dc_charge_parameter=dc_evse_charge_params,
         )
@@ -1486,6 +1517,7 @@ class ChargeParameterDiscovery(StateSECC):
             Namespace.ISO_V2_MSG_DEF,
             signature=signature,
         )
+        logger.info("END OF PROCESSING MESSAGE ON CHARGE PARAMETER DISCOVERY")
 
     def validate_sa_schedule_list(
         self, sa_schedules: List[SAScheduleTuple], departure_time: int
@@ -1541,6 +1573,52 @@ class ChargeParameterDiscovery(StateSECC):
                 valid = False
                 break
         return valid
+    
+    def create_empty_sa_schedule_tuple(self) -> SAScheduleTuple:
+        # Create a PMaxScheduleEntry with no power available
+        pmax_schedule_entry = PMaxScheduleEntry(
+            p_max=PVPMax(
+                multiplier=0,
+                value=0,  # No power available
+                unit=UnitSymbol.WATT
+            ),
+            time_interval=RelativeTimeInterval(
+                start=0,  # Start time
+                duration=86400  # Duration set to one day
+            )
+        )
+
+        # Create an empty PMaxSchedule
+        pmax_schedule = PMaxSchedule(
+            schedule_entries=[pmax_schedule_entry]
+        )
+
+        # Create a SalesTariffEntry with no power levels
+        sales_tariff_entry = SalesTariffEntry(
+            e_price_level=1,
+            time_interval=RelativeTimeInterval(
+                start=0,  # Start time
+                duration=86400  # Duration set to one day
+            )
+        )
+
+        # Create an empty SalesTariff with a valid SalesTariffID in range [1..255]
+        sales_tariff = SalesTariff(
+            id="id1",
+            sales_tariff_id=1,  # Valid range [1..255]
+            sales_tariff_entry=[sales_tariff_entry],
+            num_e_price_levels=1
+        )
+
+        # Create an empty SAScheduleTuple
+        sa_schedule_tuple = SAScheduleTuple(
+            sa_schedule_tuple_id=1,  # Assign a valid ID for the schedule tuple
+            p_max_schedule=pmax_schedule,
+            sales_tariff=sales_tariff
+        )
+
+        return sa_schedule_tuple
+
 
 
 class PowerDelivery(StateSECC):
@@ -2058,12 +2136,16 @@ class SessionStop(StateSECC):
             self.comm_session.writer.get_extra_info("peername"),
             session_stop_state,
         )
+
         self.create_next_message(
             next_state,
             SessionStopRes(response_code=ResponseCode.OK),
             Timeouts.V2G_SECC_SEQUENCE_TIMEOUT,
             Namespace.ISO_V2_MSG_DEF,
         )
+        
+        self.comm_session.ocpp_client.transaction_id = self.comm_session.session_id
+        await self.comm_session.ocpp_client.send_transaction_event()
 
 
 # ============================================================================

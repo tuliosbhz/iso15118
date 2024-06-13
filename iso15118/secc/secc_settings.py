@@ -96,7 +96,7 @@ class Config:
         # Note: SECC will not offer 'pnc' if chosen transport protocol is not TLS
         # Must be a list containing either AuthEnum members EIM (for External
         # Identification Means), PNC (for Plug & Charge) or both
-        auth_modes = env.list("AUTH_MODES", default=self.default_auth_modes)
+        auth_modes = env.list("AUTH_MODES", default="EIM")
         self.supported_auth_options = load_requested_auth_modes(auth_modes)
 
         # Whether the charging station allows the EV to go into Standby (one of the

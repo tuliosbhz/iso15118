@@ -157,7 +157,7 @@ from iso15118.shared.security import (
 from iso15118.shared.states import State
 
 logger = logging.getLogger(__name__)
-
+logger.setLevel(logging.WARNING)
 
 def get_evse_context():
     ac_limits = EVSEACCPDLimits(
@@ -250,6 +250,8 @@ class SimEVSEController(EVSEControllerInterface):
         super().__init__()
         self.ev_data_context = EVDataContext()
         self.evse_data_context = get_evse_context()
+        self._eim_authorized = False
+        self.sa_schedule_list = None
 
     def reset_ev_data_context(self):
         self.ev_data_context = EVDataContext()
@@ -554,10 +556,14 @@ class SimEVSEController(EVSEControllerInterface):
             )
 
         return service_list
+    
+    def set_eim_authorization(self, value:bool):
+        if value:
+            self._eim_authorized = value
 
     def is_eim_authorized(self) -> bool:
         """Overrides EVSEControllerInterface.is_eim_authorized()."""
-        return False
+        return self._eim_authorized
 
     async def is_authorized(
         self,
@@ -571,15 +577,20 @@ class SimEVSEController(EVSEControllerInterface):
         response_code: Optional[
             Union[ResponseCodeDINSPEC, ResponseCodeV2, ResponseCodeV20]
         ] = None
+        authorization_status=AuthorizationStatus.ACCEPTED
         if protocol == Protocol.DIN_SPEC_70121:
             response_code = ResponseCodeDINSPEC.OK
         elif protocol == Protocol.ISO_15118_20_COMMON_MESSAGES:
             response_code = ResponseCodeV20.OK
         else:
+            if self.is_eim_authorized():
+                authorization_status=AuthorizationStatus.ONGOING
+            else: 
+                authorization_status=AuthorizationStatus.ACCEPTED
             response_code = ResponseCodeV2.OK
 
         return AuthorizationResponse(
-            authorization_status=AuthorizationStatus.ACCEPTED,
+            authorization_status=authorization_status,
             certificate_response_status=response_code,
         )
 
@@ -627,72 +638,12 @@ class SimEVSEController(EVSEControllerInterface):
         counter = 1
         start = 0
         current_pmax_val = 7000
-        while remaining_charge_duration > 0:
-            if current_pmax_val == 7000:
-                p_max = PVPMax(multiplier=0, value=11000, unit=UnitSymbol.WATT)
-                current_pmax_val = 11000
-            else:
-                p_max = PVPMax(multiplier=0, value=7000, unit=UnitSymbol.WATT)
-                current_pmax_val = 7000
 
-            p_max_schedule_entry = PMaxScheduleEntry(
-                p_max=p_max, time_interval=RelativeTimeInterval(start=start)
-            )
-
-            sales_tariff_entry = SalesTariffEntry(
-                e_price_level=counter,
-                time_interval=RelativeTimeInterval(start=start),
-            )
-
-            if remaining_charge_duration <= 86400:
-                p_max_schedule_entry = PMaxScheduleEntry(
-                    p_max=p_max,
-                    time_interval=RelativeTimeInterval(
-                        start=start, duration=remaining_charge_duration
-                    ),
-                )
-
-                sales_tariff_entry = SalesTariffEntry(
-                    e_price_level=counter,
-                    time_interval=RelativeTimeInterval(
-                        start=start, duration=remaining_charge_duration
-                    ),
-                )
-
-            remaining_charge_duration -= 86400
-            start += 86400
-            counter += 1
-            schedule_entries.append(p_max_schedule_entry)
-            sales_tariff_entries.append(sales_tariff_entry)
-
-        p_max_schedule = PMaxSchedule(schedule_entries=schedule_entries)
-
-        sales_tariff = SalesTariff(
-            id="id1",
-            sales_tariff_id=10,  # a random id
-            sales_tariff_entry=sales_tariff_entries,
-            num_e_price_levels=len(sales_tariff_entries),
-        )
-
-        # Putting the list of SAScheduleTuple entries together
-        sa_schedule_tuple = SAScheduleTuple(
-            sa_schedule_tuple_id=1,
-            p_max_schedule=p_max_schedule,
-            sales_tariff=None if is_free_charging_service else sales_tariff,
-        )
-
-        # TODO We could also implement an optional SalesTariff, but for the sake of
-        #      time we'll do that later (after the basics are implemented).
-        #      When implementing the SalesTariff, we also need to apply a digital
-        #      signature to it.
-        sa_schedule_list.append(sa_schedule_tuple)
-
-        # TODO We need to take care of [V2G2-741], which says that the SECC needs to
-        #      resend a previously agreed SAScheduleTuple and the "period of time
-        #      this SAScheduleTuple applies for shall be reduced by the time already
-        #      elapsed".
-
-        return sa_schedule_list
+        if not self.sa_schedule_list: #If not received on this function just return as EVSEprocessing.ONGOING
+            return None
+        else:
+            return self.sa_schedule_list
+    
 
     async def get_meter_info_v2(self) -> MeterInfoV2:
         """Overrides EVSEControllerInterface.get_meter_info_v2()."""

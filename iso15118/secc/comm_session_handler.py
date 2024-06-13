@@ -63,6 +63,9 @@ from iso15118.shared.notifications import (
 )
 from iso15118.shared.utils import cancel_task, wait_for_tasks
 
+#Added by Tulio Soares
+from iso15118.shared.ocpp_client import ChargePoint
+
 logger = logging.getLogger(__name__)
 
 
@@ -80,13 +83,14 @@ class SECCCommunicationSession(V2GCommunicationSession):
         evse_controller: EVSEControllerInterface,
         evse_id: str,
         ev_session_context: Optional[EVSessionContext15118] = None,
+        ocpp_client: ChargePoint = None,
     ):
         # Need to import here to avoid a circular import error
         # pylint: disable=import-outside-toplevel
         from iso15118.secc.states.sap_states import SupportedAppProtocol
 
         V2GCommunicationSession.__init__(
-            self, transport, SupportedAppProtocol, session_handler_queue, self
+            self, transport, SupportedAppProtocol, session_handler_queue, self, ocpp_client
         )
 
         self.config = config
@@ -205,6 +209,13 @@ class CommunicationSessionHandler:
             str, Tuple[SECCCommunicationSession, asyncio.Task]
         ] = {}
 
+        #The OCPP client added by Túlio Soares
+        self._ocpp_active = False
+        self.leader_address = None
+        self.cp_id = 1 
+        # Create a ChargePoint instance without a WebSocket connection initially
+        self.ocpp_client: ChargePoint
+
     async def start_session_handler(
         self, iface: str, start_udp_server: Optional[bool] = True
     ):
@@ -214,6 +225,15 @@ class CommunicationSessionHandler:
         Therefore, we need to create a separate async method to be our
         constructor.
         """
+        #Start the OCPP client task here
+        self.cp_id = await self.evse_controller.get_evse_id(protocol=Protocol.ISO_15118_2)
+        self.ocpp_client = ChargePoint(f"{self.cp_id}", None)
+        #Initialize the variables of the ocpp_client accordantly to the evse_controller
+        ocpp_cli_task = asyncio.create_task(self.ocpp_client.ocpp_cli_routine())
+
+        while self.ocpp_client._station_booted == False:
+            logger.info("Waiting connection from OCPP client with OCPP server")
+            await asyncio.sleep(1)
 
         if start_udp_server:
             self.udp_server = UDPServer(self._rcv_queue, iface)
@@ -227,6 +247,7 @@ class CommunicationSessionHandler:
 
         self.list_of_tasks.extend(
             [
+                ocpp_cli_task,
                 self.get_from_rcv_queue(self._rcv_queue),
                 self.check_status_task(True),
             ]
@@ -296,6 +317,7 @@ class CommunicationSessionHandler:
                             self.evse_controller,
                             await self.evse_controller.get_evse_id(Protocol.UNKNOWN),
                             ev_context,
+                            ocpp_client=self.ocpp_client,
                         )
                     except (KeyError, ConnectionResetError) as e:
                         if isinstance(e, ConnectionResetError):
@@ -309,6 +331,7 @@ class CommunicationSessionHandler:
                             self.config,
                             self.evse_controller,
                             await self.evse_controller.get_evse_id(Protocol.UNKNOWN),
+                            ocpp_client=self.ocpp_client,
                         )
 
                     task = asyncio.create_task(

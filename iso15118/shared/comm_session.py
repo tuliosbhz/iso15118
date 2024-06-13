@@ -55,6 +55,11 @@ from iso15118.shared.notifications import StopNotification
 from iso15118.shared.states import Pause, State, Terminate
 from iso15118.shared.utils import wait_for_tasks
 
+#Added by Tulio Soares
+from iso15118.shared.ocpp_client import ChargePoint
+#from iso15118.shared.ocpp_to_iso_schedule import convert_ocpp_to_iso15118_schedule
+
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -293,6 +298,7 @@ class V2GCommunicationSession(SessionStateMachine):
         start_state: Type["State"],
         session_handler_queue: asyncio.Queue,
         comm_session: Union["EVCCCommunicationSession", "SECCCommunicationSession"],
+        ocpp_client: ChargePoint = None,
     ):
         """
         Initialise the communication session with EVCC or SECC specific
@@ -343,7 +349,10 @@ class V2GCommunicationSession(SessionStateMachine):
         self.stop_reason: Optional[StopNotification] = None
         self.last_message_sent: Optional[V2GTPMessage] = None
         self._started: bool = True
-
+        
+        # Create a ChargePoint instance without a WebSocket connection initially
+        self.ocpp_client = ocpp_client #ChargePoint(f"CP0{self.ocpp_port}", None)
+        comm_session.ocpp_client = ocpp_client
         logger.info("Starting a new communication session")
         SessionStateMachine.__init__(self, start_state, comm_session)
 
@@ -356,8 +365,9 @@ class V2GCommunicationSession(SessionStateMachine):
         Args:
             timeout:    The time the EVCC / SECC is waiting for a next message
         """
+        #Added by Tulio Soares: Append boot notification task for the tasks lists to start the OCPP client
         tasks = [self.rcv_loop(timeout)]
-
+        
         try:
             self._started = True
             await wait_for_tasks(tasks)
@@ -494,8 +504,22 @@ class V2GCommunicationSession(SessionStateMachine):
                     gc.disable()
                 # This will create the values needed for the next state, such as
                 # next_state, next_v2gtp_message, next_message_payload_type etc.
+                """
+                    Before processing a iso15118 message rcv update external data with OCPP when: (Added by Tulio)
+                    - Authentication
+                    - Boot notification
+                    - 
+                """
+                if self.ocpp_client:
+                    self.ocpp_client._secc_current_state = str(self.current_state)
                 await self.process_message(message)
+                """
+                After processing the message the OCPP should update the server with the new stat (Added by Tulio Soares)
+                """
+                #TODO: To pass this to inside of the iso15118 stages
+
                 if self.current_state.next_v2gtp_msg:
+                    logger.info("HERE ON  self.current_state.next_v2gtp_msg TRUE ")
                     # next_v2gtp_msg would not be set only if the next state is either
                     # Terminate or Pause on the EVCC side
                     await self.send(self.current_state.next_v2gtp_msg)

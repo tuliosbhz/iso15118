@@ -213,17 +213,27 @@ class SimEVController(EVControllerInterface):
         """Overrides EVControllerInterface.get_charge_params_v2()."""
         ac_charge_params = None
         dc_charge_params = None
+        
+        def simulate_gaussian_distribution(mean, stddev, lower_bound, upper_bound):
+            value = random.gauss(mean, stddev)
+            return max(lower_bound, min(value, upper_bound))
 
         if (await self.get_energy_transfer_mode(protocol)).startswith("AC"):
-            e_amount = PVEAmount(multiplier=0, value=60, unit=UnitSymbol.WATT_HOURS)
+            e_amount_value = simulate_gaussian_distribution(60, 10, 30, 90)  # Simulating energy amount in watt-hours
+            ev_max_voltage_value = simulate_gaussian_distribution(230, 50, 220, 250)  # Simulating voltage in volts
+            ev_max_current_value = simulate_gaussian_distribution(32000, 5000, 20000, 32766)  # Simulating current in milliamps
+            ev_min_current_value = simulate_gaussian_distribution(6, 3, 0, 10)  # Simulating min current in amps
+
+        if (await self.get_energy_transfer_mode(protocol)).startswith("AC"):
+            e_amount = PVEAmount(multiplier=0, value=int(e_amount_value), unit=UnitSymbol.WATT_HOURS)
             ev_max_voltage = PVEVMaxVoltage(
-                multiplier=0, value=400, unit=UnitSymbol.VOLTAGE
+                multiplier=0, value=int(ev_max_voltage_value), unit=UnitSymbol.VOLTAGE
             )
             ev_max_current = PVEVMaxCurrent(
-                multiplier=-3, value=32000, unit=UnitSymbol.AMPERE
+                multiplier=-3, value=int(ev_max_current_value), unit=UnitSymbol.AMPERE
             )
             ev_min_current = PVEVMinCurrent(
-                multiplier=0, value=10, unit=UnitSymbol.AMPERE
+                multiplier=0, value=int(ev_min_current_value), unit=UnitSymbol.AMPERE
             )
             ac_charge_params = ACEVChargeParameter(
                 departure_time=0,

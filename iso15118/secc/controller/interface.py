@@ -102,8 +102,9 @@ class EVSEControllerInterface(ABC):
     def __init__(self):
         self.ev_data_context = EVDataContext()
         self.evse_data_context = EVSEDataContext()
-
+        self._eim_authorized = False
         self._selected_protocol: Optional[Protocol] = None
+        self.sa_schedule_list: List[SAScheduleTuple] = None
 
     def reset_ev_data_context(self):
         self.ev_data_context = EVDataContext()
@@ -199,6 +200,17 @@ class EVSEControllerInterface(ABC):
         Relevant for:
         - ISO 15118-2
         - ISO 15118-20
+        """
+        raise NotImplementedError
+    
+    @abstractmethod
+    def set_eim_authorization(self, value:bool):
+        """
+        Provides the information on whether or not the user is authorized to charge at
+        this EVSE based on trigger from Secondary actor SA.
+
+        Relevant for:
+        - ISO 15118-2
         """
         raise NotImplementedError
 

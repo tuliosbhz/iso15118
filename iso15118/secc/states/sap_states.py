@@ -85,6 +85,8 @@ class SupportedAppProtocol(StateSECC):
                     sap_res = SupportedAppProtocolRes(
                         response_code=res, schema_id=protocol.schema_id
                     )
+                    #Added by Tulio: OCPP message to update server
+                    await self.comm_session.ocpp_client.send_status_notification()
                     break
 
                 if (

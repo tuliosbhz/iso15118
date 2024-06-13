@@ -8,18 +8,21 @@ from iso15118.secc.secc_settings import Config
 from iso15118.shared.exificient_exi_codec import ExificientEXICodec
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
-
+#ISO 15118 task
 async def main():
     """
     Entrypoint function that starts the ISO 15118 code running on
     the SECC (Supply Equipment Communication Controller)
     """
+    #To execute on __init__ function of OCPP client
     config = Config()
     config.load_envs()
     config.print_settings()
 
     sim_evse_controller = SimEVSEController()
+    #Task to execute inside the OCPP client
     await sim_evse_controller.set_status(ServiceStatus.STARTING)
     await SECCHandler(
         exi_codec=ExificientEXICodec(),

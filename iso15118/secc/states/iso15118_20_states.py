@@ -3,6 +3,7 @@ This module contains the SECC's States used to process the EVCC's incoming
 V2GMessage objects of the ISO 15118-20 protocol, from SessionSetupReq to
 SessionStopReq.
 """
+
 import asyncio
 import logging
 import time
@@ -1427,9 +1428,9 @@ class ACChargeLoop(StateSECC):
         if ac_charge_loop_req.meter_info_requested:
             meter_info = await self.comm_session.evse_controller.get_meter_info_v20()
 
-        evse_status: Optional[
-            EVSEStatus
-        ] = await self.comm_session.evse_controller.get_evse_status()
+        evse_status: Optional[EVSEStatus] = (
+            await self.comm_session.evse_controller.get_evse_status()
+        )
 
         response_code = ResponseCode.OK
         params = None
@@ -1585,9 +1586,8 @@ class DCCableCheck(StateSECC):
 
     def __init__(self, comm_session: SECCCommunicationSession):
         super().__init__(comm_session, Timeouts.V2G_EVCC_COMMUNICATION_SETUP_TIMEOUT)
-        self.cable_check_req_was_received = False
+        self.contactors_closed = False
         self.cable_check_started = False
-        self.contactors_closed_for_cable_check: Optional[bool] = None
 
     async def process_message(
         self,
@@ -1613,46 +1613,50 @@ class DCCableCheck(StateSECC):
         next_state = None
         processing = EVSEProcessing.ONGOING
 
-        if not self.cable_check_req_was_received:
-            # Requirement in 6.4.3.106 of the IEC 61851-23
-            # Any relays in the DC output circuit of the DC station shall
-            # be closed during the insulation test
-            self.contactors_closed_for_cable_check = (
-                await self.comm_session.evse_controller.is_contactor_closed()
-            )
-            self.cable_check_req_was_received = True
+        if not self.cable_check_started:
+            # Start cable check as contactors are now closed.
+            await self.comm_session.evse_controller.start_cable_check()
+            self.cable_check_started = True
 
-        if self.contactors_closed_for_cable_check is not None:
-            if not self.contactors_closed_for_cable_check:
+        if self.contactors_closed:
+            isolation_level = (
+                await self.comm_session.evse_controller.get_cable_check_status()
+            )
+
+            if isolation_level in [IsolationLevel.VALID, IsolationLevel.WARNING]:
+                if isolation_level == IsolationLevel.WARNING:
+                    logger.warning(
+                        "Isolation resistance measured by EVSE is in Warning range"
+                    )
+                next_state = DCPreCharge
+                processing = EVSEProcessing.FINISHED
+            elif isolation_level in [IsolationLevel.INVALID, IsolationLevel.FAULT]:
                 self.stop_state_machine(
-                    "Contactor didnt close for Cable Check",
+                    f"Isolation Failure: {isolation_level}",
                     message,
                     ResponseCode.FAILED,
                 )
                 return
-
-            if self.cable_check_started:
-                isolation_level = (
-                    await self.comm_session.evse_controller.get_cable_check_status()
+        else:
+            if not self.contactors_closed:
+                # Requirement in 6.4.3.106 of the IEC 61851-23
+                # Any relays in the DC output circuit of the DC station shall
+                # be closed during the insulation test
+                # If None is returned, then contactor close operation is ongoing.
+                contactors_closed_for_cable_check: Optional[bool] = (
+                    await self.comm_session.evse_controller.is_contactor_closed()
                 )
 
-                if isolation_level in [IsolationLevel.VALID, IsolationLevel.WARNING]:
-                    if isolation_level == IsolationLevel.WARNING:
-                        logger.warning(
-                            "Isolation resistance measured by EVSE is in Warning range"
+                if contactors_closed_for_cable_check is not None:
+                    if contactors_closed_for_cable_check:
+                        self.contactors_closed = True
+                    else:
+                        self.stop_state_machine(
+                            "Contactor didnt close for Cable Check",
+                            message,
+                            ResponseCode.FAILED,
                         )
-                    next_state = DCPreCharge
-                    processing = EVSEProcessing.FINISHED
-                elif isolation_level in [IsolationLevel.INVALID, IsolationLevel.FAULT]:
-                    self.stop_state_machine(
-                        f"Isolation Failure: {isolation_level}",
-                        message,
-                        ResponseCode.FAILED,
-                    )
-                    return
-            else:
-                await self.comm_session.evse_controller.start_cable_check()
-                self.cable_check_started = True
+                        return
 
         dc_cable_check_res = DCCableCheckRes(
             header=MessageHeader(
@@ -1839,9 +1843,9 @@ class DCChargeLoop(StateSECC):
                 )
             )  # noqa
 
-        evse_status: Optional[
-            EVSEStatus
-        ] = await self.comm_session.evse_controller.get_evse_status()
+        evse_status: Optional[EVSEStatus] = (
+            await self.comm_session.evse_controller.get_evse_status()
+        )
 
         meter_info: Optional[MeterInfo] = None
         if meter_info_requested:

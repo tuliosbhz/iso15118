@@ -2,6 +2,7 @@
 This module contains the abstract class for an SECC to retrieve data from the EVSE
 (Electric Vehicle Supply Equipment).
 """
+
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -395,8 +396,9 @@ class EVSEControllerInterface(ABC):
     @abstractmethod
     async def is_contactor_opened(self) -> bool:
         """
-        Sends a command to the SECC to get the contactor status is opened to terminate
-        energy flow
+        This method is used to check if the contactor is open.
+        Used in PowerDelivery when the EV requests to
+        stop energy transfer.
 
         Relevant for:
         - all protocols
@@ -406,7 +408,10 @@ class EVSEControllerInterface(ABC):
     @abstractmethod
     async def is_contactor_closed(self) -> Optional[bool]:
         """
-        Sends a command to the SECC to get the contactor status is closed
+        This method is used to check if the contactor is closed.
+        In AC, this method is called in PowerDelivery when the EV requests to
+        start energy transfer.
+        In DC, this method is called during CableCheck.
 
         Relevant for:
         - all protocols

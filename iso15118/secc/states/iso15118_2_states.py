@@ -3,6 +3,7 @@ This module contains the SECC's States used to process the EVCC's incoming
 V2GMessage objects of the ISO 15118-2 protocol, from SessionSetupReq to
 SessionStopReq.
 """
+
 import asyncio
 import base64
 import logging
@@ -1369,14 +1370,14 @@ class ChargeParameterDiscovery(StateSECC):
         evse_data_context = self.comm_session.evse_controller.evse_data_context
         ev_data_context = self.comm_session.evse_controller.ev_data_context
 
-        self.comm_session.selected_energy_mode = charge_params_req.requested_energy_mode
+        ev_data_context.selected_energy_mode = charge_params_req.requested_energy_mode
         self.comm_session.selected_charging_type_is_ac = (
-            self.comm_session.selected_energy_mode.value.startswith("AC")
+            ev_data_context.selected_energy_mode.value.startswith("AC")
         )
 
-        max_schedule_entries: Optional[
-            int
-        ] = charge_params_req.max_entries_sa_schedule_tuple
+        max_schedule_entries: Optional[int] = (
+            charge_params_req.max_entries_sa_schedule_tuple
+        )
 
         ac_evse_charge_params: Optional[ACEVSEChargeParameter] = None
         dc_evse_charge_params: Optional[DCEVSEChargeParameter] = None
@@ -2073,7 +2074,7 @@ class MeteringReceipt(StateSECC):
 
         evse_controller = self.comm_session.evse_controller
         if (
-            self.comm_session.selected_energy_mode
+            evse_controller.ev_data_context.selected_energy_mode
             and self.comm_session.selected_charging_type_is_ac
         ):
             metering_receipt_res = MeteringReceiptRes(
@@ -2268,9 +2269,8 @@ class CableCheck(StateSECC):
 
     def __init__(self, comm_session: SECCCommunicationSession):
         super().__init__(comm_session, Timeouts.V2G_SECC_SEQUENCE_TIMEOUT)
-        self.cable_check_req_was_received = False
         self.cable_check_started = False
-        self.contactors_closed_for_cable_check: Optional[bool] = None
+        self.contactors_closed = False
 
     async def process_message(
         self,
@@ -2301,55 +2301,57 @@ class CableCheck(StateSECC):
         next_state = None
         evse_processing = EVSEProcessing.ONGOING
 
-        if not self.cable_check_req_was_received:
-            # Requirement in 6.4.3.106 of the IEC 61851-23
-            # Any relays in the DC output circuit of the DC station shall
-            # be closed during the insulation test
-            self.contactors_closed_for_cable_check = (
-                await self.comm_session.evse_controller.is_contactor_closed()
-            )
-            self.cable_check_req_was_received = True
+        if not self.cable_check_started:
+            await self.comm_session.evse_controller.start_cable_check()
+            self.cable_check_started = True
 
-        if self.contactors_closed_for_cable_check is not None:
-            if not self.contactors_closed_for_cable_check:
+        if self.contactors_closed:
+            isolation_level = (
+                await self.comm_session.evse_controller.get_cable_check_status()
+            )  # noqa
+
+            evse_processing = EVSEProcessing.ONGOING
+            next_state = None
+            if isolation_level in [
+                IsolationLevel.VALID,
+                IsolationLevel.WARNING,
+            ]:
+                if isolation_level == IsolationLevel.WARNING:
+                    logger.warning(
+                        "Isolation resistance measured by EVSE is in Warning-Range"
+                    )
+                evse_processing = EVSEProcessing.FINISHED
+                next_state = PreCharge
+            elif isolation_level in [
+                IsolationLevel.FAULT,
+                IsolationLevel.NO_IMD,
+                IsolationLevel.INVALID,
+            ]:
                 self.stop_state_machine(
-                    "Contactor didnt close for Cable Check",
+                    f"Isolation Failure: {isolation_level}",
                     message,
                     ResponseCode.FAILED,
                 )
                 return
+        else:
+            # Requirement in 6.4.3.106 of the IEC 61851-23
+            # Any relays in the DC output circuit of the DC station shall
+            # be closed during the insulation test
+            # If None is returned, then contactor close operation is ongoing.
+            contactors_closed_for_cable_check = (
+                await self.comm_session.evse_controller.is_contactor_closed()
+            )
 
-            if self.cable_check_started:
-                isolation_level = (
-                    await self.comm_session.evse_controller.get_cable_check_status()
-                )  # noqa
-
-                evse_processing = EVSEProcessing.ONGOING
-                next_state = None
-                if isolation_level in [
-                    IsolationLevel.VALID,
-                    IsolationLevel.WARNING,
-                ]:
-                    if isolation_level == IsolationLevel.WARNING:
-                        logger.warning(
-                            "Isolation resistance measured by EVSE is in Warning-Range"
-                        )
-                    evse_processing = EVSEProcessing.FINISHED
-                    next_state = PreCharge
-                elif isolation_level in [
-                    IsolationLevel.FAULT,
-                    IsolationLevel.NO_IMD,
-                    IsolationLevel.INVALID,
-                ]:
+            if contactors_closed_for_cable_check is not None:
+                if contactors_closed_for_cable_check:
+                    self.contactors_closed = True
+                else:
                     self.stop_state_machine(
-                        f"Isolation Failure: {isolation_level}",
+                        "Contactor didnt close for Cable Check",
                         message,
                         ResponseCode.FAILED,
                     )
                     return
-            else:
-                await self.comm_session.evse_controller.start_cable_check()
-                self.cable_check_started = True
 
         self.comm_session.evse_controller.ev_data_context.present_soc = (
             cable_check_req.dc_ev_status.ev_ress_soc

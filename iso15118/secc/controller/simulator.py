@@ -156,6 +156,7 @@ from iso15118.shared.security import (
     load_priv_key,
 )
 from iso15118.shared.states import State
+from iso15118.shared.find_ip_addr import ip_address_assign
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -253,6 +254,7 @@ class SimEVSEController(EVSEControllerInterface):
         self.evse_data_context = get_evse_context()
         self._eim_authorized = False
         self.sa_schedule_list = None
+        self.ip_address = None
 
     def reset_ev_data_context(self):
         self.ev_data_context = EVDataContext()
@@ -275,7 +277,14 @@ class SimEVSEController(EVSEControllerInterface):
             # as “0x49 0xA8 0x9A 0x63 0x60”.
             return "49A89A6360"
         """Overrides EVSEControllerInterface.get_evse_id()."""
-        return "UK123E1234"
+        #Make unique evse_ids for running different simulations
+        if not self.ip_address:
+            self.ip_address = ip_address_assign()
+            #return self.ip_address
+        base_id = "PT123E00"
+        last_segment = int(self.ip_address.split('.')[-1])
+        evse_id = base_id + str(last_segment)
+        return evse_id
 
     async def get_supported_energy_transfer_modes(
         self, protocol: Protocol

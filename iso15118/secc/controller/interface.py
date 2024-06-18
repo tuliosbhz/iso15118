@@ -106,6 +106,7 @@ class EVSEControllerInterface(ABC):
         self._eim_authorized = False
         self._selected_protocol: Optional[Protocol] = None
         self.sa_schedule_list: List[SAScheduleTuple] = None
+        self.ip_address = None
 
     def reset_ev_data_context(self):
         self.ev_data_context = EVDataContext()

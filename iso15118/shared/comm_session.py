@@ -55,7 +55,8 @@ from iso15118.shared.states import Pause, State, Terminate
 from iso15118.shared.utils import wait_for_tasks
 
 #Added by Tulio Soares
-from iso15118.shared.ocpp_client import ChargePoint
+#from iso15118.shared.ocpp_client import ChargePoint
+from iso15118.shared.ocpp_client_bench import ChargePoint
 #from iso15118.shared.ocpp_to_iso_schedule import convert_ocpp_to_iso15118_schedule
 
 

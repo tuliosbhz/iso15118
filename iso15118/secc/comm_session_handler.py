@@ -64,7 +64,8 @@ from iso15118.shared.notifications import (
 from iso15118.shared.utils import cancel_task, wait_for_tasks
 
 #Added by Tulio Soares
-from iso15118.shared.ocpp_client import ChargePoint
+#from iso15118.shared.ocpp_client import ChargePoint
+from iso15118.shared.ocpp_client_bench import ChargePoint
 
 logger = logging.getLogger(__name__)
 

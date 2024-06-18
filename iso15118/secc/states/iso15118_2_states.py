@@ -228,7 +228,6 @@ class SessionSetup(StateSECC):
 
 
         self.comm_session.ocpp_client.transaction_id = session_id
-        self.comm_session.ocpp_client.evse_id = int(self.comm_session.evse_id[-4:])
 
         await self.comm_session.ocpp_client.send_transaction_event()
 

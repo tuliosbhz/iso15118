@@ -59,6 +59,10 @@ class ChargePoint(cp):
         self.charging_profile = None
         self.experiment = True #Set to true to execute experiments on real EVSEs
 
+        # Initialize IP generator base values
+        self.ip_base = ".".join(self.my_address.split('.')[:3])
+        self.current_octet = 0
+
         # Initialize file for benchmarks
         current_time = datetime.now().strftime("%m-%d-%Y")
         self.benchmark_file = f"client_benchmarks_{current_time}.csv"
@@ -211,14 +215,8 @@ class ChargePoint(cp):
         return call_result.SetChargingProfile(status="Accepted")
     
     def ip_generator(self):
-        if not hasattr(self.ip_generator, "base_ip"):
-            self.my_address = ip_address_assign()
-            self.ip_generator.base_ip = ".".join(self.my_address.split('.')[:3])
-            self.ip_generator.current_octet = 0
-        
-        new_ip = f"{self.ip_generator.base_ip}.{self.ip_generator.current_octet}"
-        self.ip_generator.current_octet += 1
-
+        new_ip = f"{self.ip_base}.{self.current_octet}"
+        self.current_octet = (self.current_octet + 1) % 256
         return new_ip
     
     async def get_csms_address(self):

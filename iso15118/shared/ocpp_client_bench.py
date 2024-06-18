@@ -60,7 +60,7 @@ class ChargePoint(cp):
         self.experiment = True #Set to true to execute experiments on real EVSEs
 
         # Initialize file for benchmarks
-        current_time = datetime.now().strftime("%m-%d-%Y_%H-%M-%S")
+        current_time = datetime.now().strftime("%m-%d-%Y")
         self.benchmark_file = f"client_benchmarks_{current_time}.csv"
         with open(self.benchmark_file, mode='w', newline='') as file:
             writer = csv.writer(file)

@@ -16,19 +16,24 @@ async def main():
     Entrypoint function that starts the ISO 15118 code running on
     the SECC (Supply Equipment Communication Controller)
     """
-    #To execute on __init__ function of OCPP client
-    config = Config()
-    config.load_envs()
-    config.print_settings()
+    while True:
+        try:
+            #To execute on __init__ function of OCPP client
+            config = Config()
+            config.load_envs()
+            config.print_settings()
 
-    sim_evse_controller = SimEVSEController()
-    #Task to execute inside the OCPP client
-    await sim_evse_controller.set_status(ServiceStatus.STARTING)
-    await SECCHandler(
-        exi_codec=ExificientEXICodec(),
-        evse_controller=sim_evse_controller,
-        config=config,
-    ).start(config.iface)
+            sim_evse_controller = SimEVSEController()
+            #Task to execute inside the OCPP client
+            await sim_evse_controller.set_status(ServiceStatus.STARTING)
+            await SECCHandler(
+                exi_codec=ExificientEXICodec(),
+                evse_controller=sim_evse_controller,
+                config=config,
+            ).start(config.iface)
+        except Exception as e:
+            logging.error(e)
+            await asyncio.sleep(1)
 
 
 def run():

@@ -57,9 +57,11 @@ class ChargePoint(cp):
         self.evMaxVoltage = None
     
         self.charging_profile = None
-        self.experiment = True #Set to true to execute experiments on real EVSEs
+        self.experiment = False #Set to true to execute experiments on real EVSEs
 
         # Initialize IP generator base values
+        self.local_ip_addresses = ['127.0.0.1', '0.0.0.0']
+        self.local_ip_index = 0
         self.ip_base = ".".join(self.my_address.split('.')[:3])
         self.current_octet = 0
 
@@ -215,8 +217,20 @@ class ChargePoint(cp):
         return call_result.SetChargingProfile(status="Accepted")
     
     def ip_generator(self):
+        # Check if we need to return a local IP address
+        if self.local_ip_index < len(self.local_ip_addresses):
+            new_ip = self.local_ip_addresses[self.local_ip_index]
+            self.local_ip_index += 1
+            return new_ip
+
+        # Generate the next IP in the sequence
         new_ip = f"{self.ip_base}.{self.current_octet}"
         self.current_octet = (self.current_octet + 1) % 256
+
+        # Reset local IP index when wrapping around
+        if self.current_octet == 0:
+            self.local_ip_index = 0
+
         return new_ip
     
     async def get_csms_address(self):

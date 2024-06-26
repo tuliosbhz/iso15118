@@ -19,25 +19,28 @@ async def main():
     the EVCC (EV Communication Controller)
     """
     while True:
-        config = Config()
-        config.load_envs()
-        if len(sys.argv) > 1:
-            ev_config_file_path = sys.argv[1]
-            if ev_config_file_path:
-                config.ev_config_file_path = ev_config_file_path
-        
-        evcc_config = await load_from_file(config.ev_config_file_path)
-        await EVCCHandler(
-            evcc_config=evcc_config,
-            iface=config.iface,
-            exi_codec=ExificientEXICodec(),
-            ev_controller=SimEVController(evcc_config),
-        ).start()
-        arrival_rate = 0.1
-        inter_arrival_inter = simulate_next_ev_arrival(arrival_rate)
-        logging.info(f"EVCCsim: Waiting for the next vehicle to plugin in {inter_arrival_inter} s")
-        await asyncio.sleep(inter_arrival_inter)
-
+        try: 
+            config = Config()
+            config.load_envs()
+            if len(sys.argv) > 1:
+                ev_config_file_path = sys.argv[1]
+                if ev_config_file_path:
+                    config.ev_config_file_path = ev_config_file_path
+            
+            evcc_config = await load_from_file(config.ev_config_file_path)
+            await EVCCHandler(
+                evcc_config=evcc_config,
+                iface=config.iface,
+                exi_codec=ExificientEXICodec(),
+                ev_controller=SimEVController(evcc_config),
+            ).start()
+            arrival_rate = 0.005
+            inter_arrival_inter = simulate_next_ev_arrival(arrival_rate)
+            logging.info(f"EVCCsim: Waiting for the next vehicle to plugin in {inter_arrival_inter} s")
+            await asyncio.sleep(inter_arrival_inter)
+        except Exception as e:
+            logging.error(e)
+            await asyncio.sleep(2)
 
 def run():
     try:

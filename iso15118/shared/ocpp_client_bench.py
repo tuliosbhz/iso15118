@@ -6,6 +6,7 @@ import psutil
 from datetime import datetime
 import uuid
 from iso15118.shared.find_ip_addr import ip_address_assign
+import sys
 
 try:
     import websockets
@@ -57,7 +58,7 @@ class ChargePoint(cp):
         self.evMaxVoltage = None
     
         self.charging_profile = None
-        self.experiment = True #Set to true to execute experiments on real EVSEs
+        self.experiment = False #Set to true to execute experiments on real EVSEs
 
         # Initialize IP generator base values
         self.local_ip_addresses = ['127.0.0.1', '0.0.0.0']
@@ -70,18 +71,30 @@ class ChargePoint(cp):
         self.benchmark_file = f"client_benchmarks_{current_time}.csv"
         with open(self.benchmark_file, mode='w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(["Timestamp", "Message", "Latency", "CPU_Usage", "Memory_Usage", "TransactionID", "EVSEID", "CPID", "Interval", "CSMSAddress"])
+            writer.writerow(["Timestamp", "Message", "Latency","Throughput", "CPU_Usage", "Memory_Usage", "TransactionID", "EVSEID", "CPID", "Interval", "CSMSAddress"])
 
-    def record_benchmark(self, message, start_time):
-        latency = time.time() - start_time
+    def record_benchmark(self, message_name, start_time, end_time, total_size):
+        latency = end_time - start_time
         cpu_usage = psutil.cpu_percent()
         memory_usage = psutil.virtual_memory().percent
+        throughput = (total_size * 8) / (latency * 1_000_000)
         with open(self.benchmark_file, mode='a', newline='') as file:
             writer = csv.writer(file)
             writer.writerow([
-                datetime.now().isoformat(), message, latency, cpu_usage, memory_usage, 
+                datetime.now().isoformat(), message_name, latency, throughput, cpu_usage, memory_usage, 
                 self.transaction_id, self.evse_id, self.cp_id, self._heartbeat_interval, self.csms_address
             ])
+    
+    #Calculate throughput
+    """
+        #First calculate the total size of the message exchanged
+        msg_size = sys.getsizeof(json.dumps(request)) + sys.getsizeof(json.dumps(response))
+        #Pickup the total latency of the round trip time of the message
+        latency = end_time - start_time
+        #Calculate the throughput
+        ocpp_throughput = (msg_size * 8) / (total_latency * 1_000_000)
+    """
+
 
     def update_boot_status(self, new_value: bool):
         self._station_booted = new_value
@@ -100,8 +113,10 @@ class ChargePoint(cp):
             reason="PowerUp",
         )
         response = await self.call(request)
-        self.record_benchmark("BootNotification", start_time)
-        print(response.custom_data)
+        end_time = time.time()
+        total_size = sys.getsizeof(request) + sys.getsizeof(response)
+        self.record_benchmark("BootNotification", start_time,end_time,total_size)
+
         self._heartbeat_interval = response.interval
 
         if response.status == "Accepted":
@@ -116,8 +131,10 @@ class ChargePoint(cp):
         ocpp_request = call.Heartbeat()
         while True:
             start_time = time.time()
-            await self.call(ocpp_request)
-            self.record_benchmark("Heartbeat", start_time)
+            ocpp_response = await self.call(ocpp_request)
+            end_time = time.time()
+            total_size = sys.getsizeof(ocpp_request) + sys.getsizeof(ocpp_response)
+            self.record_benchmark("Heartbeat", start_time, end_time, total_size)
             await asyncio.sleep(interval)
 
     async def send_transaction_event(self):
@@ -132,7 +149,7 @@ class ChargePoint(cp):
                 seq_no=0,
                 transaction_info={'transactionId': self.transaction_id, 'chargingState': "EVConnected"},
             )
-            response = await self.call(ocpp_request)
+            ocpp_response = await self.call(ocpp_request)
         elif self._secc_current_state == "SessionStop":
             ocpp_request = call.TransactionEvent(
                 event_type="Ended",
@@ -141,10 +158,12 @@ class ChargePoint(cp):
                 seq_no=0,
                 transaction_info={'transactionId': self.transaction_id, 'chargingState': "SuspendedEV"},
             )
-            response = await self.call(ocpp_request)
+            ocpp_response = await self.call(ocpp_request)
         else:
             ocpp_request = None
-        self.record_benchmark("TransactionEvent", start_time)
+        end_time = time.time()
+        total_size = sys.getsizeof(ocpp_request) + sys.getsizeof(ocpp_response)
+        self.record_benchmark("TransactionEvent", start_time, end_time, total_size)
 
     async def send_status_notification(self):
         start_time = time.time()
@@ -164,13 +183,17 @@ class ChargePoint(cp):
             response = await self.call(ocpp_request)
         else:
             ocpp_request = None
-        self.record_benchmark("StatusNotification", start_time)
+        end_time = time.time()
+        total_size = sys.getsizeof(ocpp_request) + sys.getsizeof(response)
+        self.record_benchmark("StatusNotification", start_time, end_time, total_size)
 
     async def send_authorize(self):
         start_time = time.time()
         ocpp_request = call.Authorize(id_token={"idToken": str(self.id_token), "type": self.id_token_type})
         response = await self.call(ocpp_request)
-        self.record_benchmark("Authorize", start_time)
+        end_time = time.time()
+        total_size = sys.getsizeof(ocpp_request) + sys.getsizeof(response)
+        self.record_benchmark("Authorize", start_time, end_time, total_size)
         if response.id_token_info['status'] == 'Accepted':
             self._session_authorized = True
         else:
@@ -204,7 +227,9 @@ class ChargePoint(cp):
                 max_schedule_tuples=int(self.max_schedule_tuples))
 
             response = await self.call(request)
-            self.record_benchmark("NotifyEVChargingNeeds", start_time)
+            end_time = time.time()
+            total_size = sys.getsizeof(request) + sys.getsizeof(response)
+            self.record_benchmark("NotifyEVChargingNeeds", start_time, end_time, total_size)
             await asyncio.sleep(1)
 
             return response
@@ -222,7 +247,16 @@ class ChargePoint(cp):
             new_ip = self.local_ip_addresses[self.local_ip_index]
             self.local_ip_index += 1
             return new_ip
+        
+        # Generate the next IP in the sequence within the range .20 to .40
+        new_ip = f"{self.ip_base}.{self.current_octet}"
+        self.current_octet += 1
 
+        # Reset the current_octet and local_ip_index when wrapping around
+        if self.current_octet > 30:
+            self.current_octet = 20
+            self.local_ip_index = 0
+        """
         # Generate the next IP in the sequence
         new_ip = f"{self.ip_base}.{self.current_octet}"
         self.current_octet = (self.current_octet + 1) % 256
@@ -230,7 +264,7 @@ class ChargePoint(cp):
         # Reset local IP index when wrapping around
         if self.current_octet == 0:
             self.local_ip_index = 0
-
+        """
         return new_ip
     
     async def get_csms_address(self):
@@ -261,9 +295,12 @@ class ChargePoint(cp):
                 await asyncio.gather(start_task, boot_task)
         except Exception as e:
             logging.info(str(e))
+            timestamp = time.time()
+            #self.record_benchmark(str(e), timestamp, timestamp + 0.01, 0)
+
     
     async def ocpp_cli_routine(self):
         while True:
             self.csms_address, self.ocpp_port = await self.get_csms_address()
             await self.websocket_connection(self.csms_address, self.ocpp_port)
-            await asyncio.sleep(0.01)
+            await asyncio.sleep(0.1)

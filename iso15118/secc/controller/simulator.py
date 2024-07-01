@@ -7,6 +7,7 @@ import base64
 import logging
 import time
 from typing import Dict, List, Optional, Union
+from random import randint
 
 from iso15118.secc.controller.common import UnknownEnergyService
 from iso15118.secc.controller.evse_data import (
@@ -281,8 +282,9 @@ class SimEVSEController(EVSEControllerInterface):
         if not self.ip_address:
             self.ip_address = ip_address_assign()
             #return self.ip_address
-        base_id = "PT123E00"
-        last_segment = int(self.ip_address.split('.')[-1])
+        base_id = "PT123E"
+        #last_segment = int(self.ip_address.split('.')[-1])
+        last_segment = randint(1,254)
         evse_id = base_id + str(last_segment)
         return evse_id
 

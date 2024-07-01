@@ -5,6 +5,7 @@ import struct
 from asyncio import DatagramTransport
 from sys import platform
 from typing import Optional, Tuple
+from random import randint
 
 from iso15118.shared.messages.v2gtp import V2GTPMessage
 from iso15118.shared.network import (
@@ -70,7 +71,7 @@ class UDPServer(asyncio.DatagramProtocol):
         # https://linux.die.net/man/7/socket
         # https://stackoverflow.com/questions/20616029/os-x-equivalent-of-so-bindtodevice # noqa
         if platform == "darwin":
-            full_ipv6_address = await get_link_local_full_addr(SDP_SERVER_PORT, iface)
+            full_ipv6_address = await get_link_local_full_addr(SDP_SERVER_PORT + randint(1,30), iface)
             sock.bind(full_ipv6_address)
         else:
             # Required if running on a Linux VM on Windows
@@ -83,7 +84,7 @@ class UDPServer(asyncio.DatagramProtocol):
                 socket.SO_BINDTODEVICE,
                 (iface + "\0").encode("ascii"),
             )
-            sock.bind(("", SDP_SERVER_PORT))
+            sock.bind(("", SDP_SERVER_PORT + randint(1,30)))
 
         # After the regular socket is created and bound to a port, it can be
         # added to the multicast group by using setsockopt() to set the

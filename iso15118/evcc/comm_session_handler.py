@@ -310,7 +310,7 @@ class CommunicationSessionHandler:
 
         logger.info("Communication session handler started")
 
-        await wait_for_tasks(self.list_of_tasks)
+        await wait_for_tasks(self.list_of_tasks, return_when=asyncio.FIRST_EXCEPTION)
 
     async def send_sdp(self):
         """
@@ -385,8 +385,6 @@ class CommunicationSessionHandler:
                     f"but maximum number of SDP retry cycles "
                     f"({self.config.sdp_retry_cycles}) is now reached. {shutdown_msg}"
                 )
-                
-
             self._sdp_retry_cycles -= 1
             self.sdp_retries_number = SDP_MAX_REQUEST_COUNTER
             logger.debug(
@@ -407,7 +405,9 @@ class CommunicationSessionHandler:
             self.sdp_retries_number -= 1
         else:
             self.sdp_retries_number = SDP_MAX_REQUEST_COUNTER
-            raise SDPFailedError(f"SDPRequest was not successful. " f"{shutdown_msg}")
+            logging.error(f"SDPRequest was not successful. " f"{shutdown_msg}")
+            raise asyncio.exceptions.TimeoutError(shutdown_msg)
+            #raise SDPFailedError(f"SDPRequest was not successful. " f"{shutdown_msg}")
 
     async def start_comm_session(self, host: IPv6Address, port: int, is_tls: bool):
         server_type = "TLS" if is_tls else "TCP"

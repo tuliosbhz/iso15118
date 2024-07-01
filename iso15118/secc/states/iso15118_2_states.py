@@ -1409,15 +1409,17 @@ class ChargeParameterDiscovery(StateSECC):
                                                     evMinCurrent=ev_data_context.rated_limits.ac_limits.min_charge_current,
                                                     evMaxCurrent=ev_data_context.rated_limits.ac_limits.max_charge_current,
                                                     evMaxVoltage=ev_data_context.rated_limits.ac_limits.max_voltage)
-        await self.comm_session.ocpp_client.send_notify_ev_charging_needs()
+        #await self.comm_session.ocpp_client.send_notify_ev_charging_needs()
+        send_needs_to_csms = asyncio.create_task(self.comm_session.ocpp_client.send_notify_ev_charging_needs())
 
         if self.comm_session.ocpp_client.charging_profile: 
-            if self.comm_session.ocpp_client.charging_profile:
-                        schedule_tuple = convert_ocpp_to_iso15118_schedule(self.comm_session.ocpp_client.charging_profile)
-                        self.comm_session.evse_controller.sa_schedule_list = [schedule_tuple]
-                        sa_schedule_list = [schedule_tuple]
-            else:
-                sa_schedule_list = None
+            schedule_tuple = convert_ocpp_to_iso15118_schedule(self.comm_session.ocpp_client.charging_profile)
+            self.comm_session.evse_controller.sa_schedule_list = [schedule_tuple]
+            sa_schedule_list = [schedule_tuple]
+            #Reset the charging profile received be able to request a new charging profile
+            self.comm_session.ocpp_client.charging_profile = None 
+        else:
+            sa_schedule_list = None
         
         if sa_schedule_list:
             sa_schedule_list_valid = self.validate_sa_schedule_list(

@@ -4,6 +4,7 @@ import socket
 import struct
 from asyncio import DatagramProtocol, DatagramTransport
 from typing import Optional, Tuple
+from random import randint
 
 from iso15118.shared.messages.timeouts import Timeouts
 from iso15118.shared.messages.v2gtp import V2GTPMessage
@@ -164,7 +165,7 @@ class UDPClient(DatagramProtocol):
         until the time expires? We have to test that
         """
         self._transport.sendto(
-            message.to_bytes(), (SDP_MULTICAST_GROUP, SDP_SERVER_PORT)
+            message.to_bytes(), (SDP_MULTICAST_GROUP, SDP_SERVER_PORT + randint(1,30))
         )
 
         logger.debug(f"Message sent: {message}")

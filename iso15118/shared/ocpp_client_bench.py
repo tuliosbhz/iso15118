@@ -61,7 +61,7 @@ class ChargePoint(cp):
         self.experiment = True #Set to true to execute experiments on real EVSEs
 
         # Initialize IP generator base values
-        self.local_ip_addresses = ['127.0.0.1', '0.0.0.0']
+        self.local_ip_addresses = ['127.0.0.1', '0.0.0.0', '192.168.219.15']
         self.local_ip_index = 0
         self.ip_base = ".".join(self.my_address.split('.')[:3])
         self.current_octet = 0

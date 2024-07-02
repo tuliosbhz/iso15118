@@ -58,7 +58,7 @@ class ChargePoint(cp):
         self.evMaxVoltage = None
     
         self.charging_profile = None
-        self.experiment = False #Set to true to execute experiments on real EVSEs
+        self.experiment = True #Set to true to execute experiments on real EVSEs
 
         # Initialize IP generator base values
         self.local_ip_addresses = ['127.0.0.1', '0.0.0.0']

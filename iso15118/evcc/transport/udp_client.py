@@ -165,7 +165,7 @@ class UDPClient(DatagramProtocol):
         until the time expires? We have to test that
         """
         self._transport.sendto(
-            message.to_bytes(), (SDP_MULTICAST_GROUP, SDP_SERVER_PORT + randint(1,30))
+            message.to_bytes(), (SDP_MULTICAST_GROUP, SDP_SERVER_PORT)#Added by Tulio: + randint(1,30))
         )
 
         logger.debug(f"Message sent: {message}")

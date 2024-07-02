@@ -8,6 +8,7 @@ SupportedAppProtocolReq and -Res message pair to mutually agree upon a protocol.
 import logging
 from typing import Type, Union
 
+
 from iso15118.secc.comm_session_handler import SECCCommunicationSession
 from iso15118.secc.states.din_spec_states import SessionSetup as SessionSetupDINSPEC
 from iso15118.secc.states.iso15118_2_states import SessionSetup as SessionSetupV2

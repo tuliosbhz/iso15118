@@ -3,7 +3,7 @@ import multiprocessing
 import subprocess
 
 def run_main():
-    subprocess.run(["python3", "main.py"])
+    subprocess.run(["make", "run-evcc"])
 
 if __name__ == "__main__":
     num_processes = 5 #Max of EVCCs simultaneously

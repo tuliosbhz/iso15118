@@ -47,6 +47,8 @@ class ChargePoint(cp):
         self._session_authorized = False
         self.transaction_id = None
 
+        self.session_ids = {}
+
         self.request_authorization = False
 
         self.eAmount = None
@@ -85,6 +87,19 @@ class ChargePoint(cp):
                 self.transaction_id, self.evse_id, self.cp_id, self._heartbeat_interval, self.csms_address
             ])
     
+    def start_session_benchmark(self, session_id:str, start_time:datetime, ocpp_server_id:str):
+        self.session_ids.update({session_id: [start_time, ocpp_server_id]})
+    
+    def end_session_benchmark(self, session_id, stop_time, energy_requested, evid, ocpp_server_id):
+        with open(self.benchmark_file, mode='a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow([
+                datetime.now().isoformat(),self.session_ids[session_id] , self.session_ids[session_id][0], stop_time, energy_requested, 
+                evid, self.session_ids[session_id][1], ocpp_server_id
+            ])
+        self.session_ids.pop(session_id)
+
+    
     #Calculate throughput
     """
         #First calculate the total size of the message exchanged
@@ -109,7 +124,7 @@ class ChargePoint(cp):
     async def send_boot_notification(self):
         start_time = time.time()
         request = call.BootNotification(
-            charging_station={"model": "Wallbox XYZ", "vendor_name": "anewone"},
+            charging_station={"model": "Wallbox INESCTEC_TLO", "vendor_name": "INESCTEC"},
             reason="PowerUp",
         )
         response = await self.call(request)

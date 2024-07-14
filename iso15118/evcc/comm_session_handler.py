@@ -379,7 +379,6 @@ class CommunicationSessionHandler:
 
         if new_sdp_cycle:
             if self._sdp_retry_cycles == 0:
-                #self._sdp_retry_cycles += 1
                 raise SDPFailedError(
                     f"EVCC tried to initiate a V2GCommunicationSession, "
                     f"but maximum number of SDP retry cycles "
@@ -567,6 +566,8 @@ class CommunicationSessionHandler:
                             await self.restart_sdp(True)
                         except SDPFailedError as exc:
                             logger.exception(exc)
+                            queue.task_done()
+                            return
                             # TODO not sure what else to do here
                 else:
                     logger.warning(

@@ -318,4 +318,4 @@ class ChargePoint(cp):
         while True:
             self.csms_address, self.ocpp_port = await self.get_csms_address()
             await self.websocket_connection(self.csms_address, self.ocpp_port)
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.5)

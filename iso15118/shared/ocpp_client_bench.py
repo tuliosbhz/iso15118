@@ -28,6 +28,8 @@ logging.basicConfig(level=logging.INFO)
 class ChargePoint(cp):
     def __init__(self, charge_point_id, websocket):
         super(cp, self).__init__(charge_point_id, websocket)
+        self.experiment = False #Set to TRUE to execute experiments on real the EVSEs
+
         self.cp_id = charge_point_id
         self.my_address = ip_address_assign()
         self.csms_address = "127.0.0.1"
@@ -39,7 +41,7 @@ class ChargePoint(cp):
         self._heartbeat_interval = 10
         self._new_secc_state = False
 
-        self.evse_id = int(self.my_address.split('.')[-1])
+        self.evse_id = int(self.my_address.split('.')[-1]) if self.experiment else int(self.cp_id.split('E')[-1])
         self.id_token = uuid.uuid4()
         self.id_token_type = "Local"
         self.connector_status = "Available"
@@ -60,7 +62,7 @@ class ChargePoint(cp):
         self.evMaxVoltage = None
     
         self.charging_profile = None
-        self.experiment = True #Set to true to execute experiments on real EVSEs
+        
 
         # Initialize IP generator base values
         self.local_ip_addresses = ['127.0.0.1', '0.0.0.0', '192.168.219.15']
@@ -300,7 +302,7 @@ class ChargePoint(cp):
     async def websocket_connection(self, csms_addr, csms_port):
         try:
             async with websockets.connect(
-                f"ws://{csms_addr}:{csms_port}/CP0{csms_port}", subprotocols=["ocpp2.0.1"]
+                f"ws://{csms_addr}:{csms_port}/CP0{self.cp_id}", subprotocols=["ocpp2.0.1"]
             ) as ws:
                 self._connection = ws
                 # Start the other tasks once the WebSocket connection is established

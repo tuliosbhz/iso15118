@@ -34,7 +34,7 @@ async def main():
                 exi_codec=ExificientEXICodec(),
                 ev_controller=SimEVController(evcc_config),
             ).start()
-            arrival_rate = 0.01
+            arrival_rate = 0.001
             inter_arrival_inter = simulate_next_ev_arrival(arrival_rate)
             logging.info(f"EVCCsim: Waiting for the next vehicle to plugin in {inter_arrival_inter} s")
             await asyncio.sleep(inter_arrival_inter)

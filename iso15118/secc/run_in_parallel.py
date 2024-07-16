@@ -6,7 +6,7 @@ def run_main():
     subprocess.run(["python3", "main.py"])
 
 if __name__ == "__main__":
-    num_processes = 5 #Max of SECCs simultaneously
+    num_processes = 10 #Max of SECCs simultaneously
     processes = []
 
     for _ in range(num_processes):

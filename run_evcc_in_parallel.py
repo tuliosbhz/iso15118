@@ -6,7 +6,7 @@ def run_main():
     subprocess.run(["make", "run-evcc"])
 
 if __name__ == "__main__":
-    num_processes = 5 #Max of EVCCs simultaneously
+    num_processes = 10 #Max of EVCCs simultaneously
     processes = []
 
     for _ in range(num_processes):

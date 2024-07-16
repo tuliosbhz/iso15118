@@ -16,7 +16,7 @@ from iso15118.shared.exceptions import (
 logger = logging.getLogger(__name__)
 
 SDP_MULTICAST_GROUP = "FF02::1"
-SDP_SERVER_PORT = 15118
+SDP_SERVER_PORT = 15118 
 
 
 def _get_link_local_addr(nic: str) -> Union[IPv6Address, None]:

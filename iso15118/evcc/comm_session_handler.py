@@ -566,7 +566,7 @@ class CommunicationSessionHandler:
                             await self.restart_sdp(True)
                         except SDPFailedError as exc:
                             logger.exception(exc)
-                            queue.task_done()
+                            #queue.task_done()
                             return
                             # TODO not sure what else to do here
                 else:

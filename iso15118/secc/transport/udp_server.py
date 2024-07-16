@@ -70,8 +70,9 @@ class UDPServer(asyncio.DatagramProtocol):
         # https://djangocas.dev/blog/linux/linux-SO_BINDTODEVICE-and-mac-IP_BOUND_IF-to-bind-socket-to-a-network-interface/ # noqa
         # https://linux.die.net/man/7/socket
         # https://stackoverflow.com/questions/20616029/os-x-equivalent-of-so-bindtodevice # noqa
+        sdp_server_port = SDP_SERVER_PORT + randint(1,10) #Added by Tulio: + randint(1,30), iface)
         if platform == "darwin":
-            full_ipv6_address = await get_link_local_full_addr(SDP_SERVER_PORT, iface)  #Added by Tulio: + randint(1,30), iface)
+            full_ipv6_address = await get_link_local_full_addr(sdp_server_port, iface) 
             sock.bind(full_ipv6_address)
         else:
             # Required if running on a Linux VM on Windows
@@ -84,7 +85,7 @@ class UDPServer(asyncio.DatagramProtocol):
                 socket.SO_BINDTODEVICE,
                 (iface + "\0").encode("ascii"),
             )
-            sock.bind(("", SDP_SERVER_PORT)) #Added by Tulio: + randint(1,30)))
+            sock.bind(("", sdp_server_port)) #Added by Tulio: + randint(1,30)))
 
         # After the regular socket is created and bound to a port, it can be
         # added to the multicast group by using setsockopt() to set the

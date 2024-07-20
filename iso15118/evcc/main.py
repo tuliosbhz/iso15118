@@ -47,7 +47,7 @@ async def main():
                 ev_controller=SimEVController(evcc_config),
                 secc_sdp_port=secc_custom_sdp_port,
             ).start()
-            arrival_rate = 0.001
+            arrival_rate = 0.005
             inter_arrival_inter = simulate_next_ev_arrival(arrival_rate)
             logging.info(f"EVCCsim: Waiting for the next vehicle to plugin in {inter_arrival_inter} s")
             await asyncio.sleep(inter_arrival_inter)

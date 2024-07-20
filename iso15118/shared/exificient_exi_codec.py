@@ -36,6 +36,14 @@ class ExificientEXICodec(IEXICodec):
         finally:
             self.gateway = self.create_gateway()
             self.exi_codec = self.gateway.jvm.com.siemens.ct.exi.main.cmd.EXICodec()
+    
+    def stop_gateway(self):
+        try:
+            self.gateway.shutdown()
+        except Exception as e:
+            logger.error(f"Failed to shutdown Java gateway: {e}")
+        finally:
+            return
 
     def encode(self, message: str, namespace: str) -> bytes:
         """

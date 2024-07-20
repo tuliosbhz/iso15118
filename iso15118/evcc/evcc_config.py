@@ -111,6 +111,7 @@ class EVCCConfig(BaseModel):
 
 async def load_from_file(file_name: str) -> EVCCConfig:
     try:
+        logger.info(f"{file_name}")
         async with async_open(file_name, "r") as f:
             json_content = await f.read()
             data = json.loads(json_content)

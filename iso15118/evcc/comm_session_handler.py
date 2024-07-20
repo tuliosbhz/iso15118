@@ -295,13 +295,13 @@ class CommunicationSessionHandler:
             Optional[V2GCommunicationSession], Optional[asyncio.Task]
         ] = (None, None)
 
-    async def start_session_handler(self):
+    async def start_session_handler(self, secc_custom_sdp_port:int = None):
         """
         This method is necessary, because python does not allow
         async def __init__. Therefore, we need to create a separate async
         method to be our constructor.
         """
-        self.udp_client = UDPClient(self._rcv_queue, self.iface)
+        self.udp_client = UDPClient(self._rcv_queue, self.iface, secc_custom_sdp_port)
         self.list_of_tasks = [
             self.udp_client.start(),
             self.get_from_rcv_queue(self._rcv_queue),

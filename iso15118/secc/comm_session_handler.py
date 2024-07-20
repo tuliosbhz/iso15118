@@ -218,7 +218,7 @@ class CommunicationSessionHandler:
         self.ocpp_client: ChargePoint
 
     async def start_session_handler(
-        self, iface: str, start_udp_server: Optional[bool] = True
+        self, iface: str, start_udp_server: Optional[bool] = True, sdp_custom_port: Optional[int] = None
     ):
         """
         This method is necessary, because python does not allow
@@ -227,7 +227,8 @@ class CommunicationSessionHandler:
         constructor.
         """
         #Start the OCPP client task here
-        self.cp_id = await self.evse_controller.get_evse_id(protocol=Protocol.ISO_15118_2)
+        self.cp_id = await self.evse_controller.get_evse_id(protocol=Protocol.ISO_15118_2, 
+                                                            sdp_port=sdp_custom_port)
         self.ocpp_client = ChargePoint(f"{self.cp_id}", None)
         #Initialize the variables of the ocpp_client accordantly to the evse_controller
         ocpp_cli_task = asyncio.create_task(self.ocpp_client.ocpp_cli_routine())
@@ -237,7 +238,7 @@ class CommunicationSessionHandler:
             await asyncio.sleep(1)
 
         if start_udp_server:
-            self.udp_server = UDPServer(self._rcv_queue, iface)
+            self.udp_server = UDPServer(self._rcv_queue, iface, sdp_custom_port)
             udp_ready_event: asyncio.Event = asyncio.Event()
             self.status_event_list.append(udp_ready_event)
             self.list_of_tasks.append(self.udp_server.start(udp_ready_event))

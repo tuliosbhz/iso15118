@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+import argparse
 
 from iso15118.evcc import Config, EVCCHandler
 from iso15118.evcc.controller.simulator import SimEVController
@@ -18,21 +19,32 @@ async def main():
     Entrypoint function that starts the ISO 15118 code running on
     the EVCC (EV Communication Controller)
     """
+    try: 
+        config = Config()
+        config.load_envs()
+        if len(sys.argv) > 1:
+            ev_config_file_path = sys.argv[1]
+            if ev_config_file_path:
+                config.ev_config_file_path = ev_config_file_path
+        
+        evcc_config = await load_from_file(config.ev_config_file_path)
+
+        if len(sys.argv) > 2:
+            secc_custom_sdp_port = int(sys.argv[2])
+            logging.info(f"SECC_SDP_PORT {secc_custom_sdp_port} s")
+        else: 
+            secc_custom_sdp_port = None
+    except Exception as e:
+        logging.error(e)
+        await asyncio.sleep(2)
     while True:
-        try: 
-            config = Config()
-            config.load_envs()
-            if len(sys.argv) > 1:
-                ev_config_file_path = sys.argv[1]
-                if ev_config_file_path:
-                    config.ev_config_file_path = ev_config_file_path
-            
-            evcc_config = await load_from_file(config.ev_config_file_path)
+        try:
             await EVCCHandler(
                 evcc_config=evcc_config,
                 iface=config.iface,
                 exi_codec=ExificientEXICodec(),
                 ev_controller=SimEVController(evcc_config),
+                secc_sdp_port=secc_custom_sdp_port,
             ).start()
             arrival_rate = 0.001
             inter_arrival_inter = simulate_next_ev_arrival(arrival_rate)

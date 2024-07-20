@@ -266,7 +266,7 @@ class SimEVSEController(EVSEControllerInterface):
     async def set_status(self, status: ServiceStatus) -> None:
         logger.debug(f"New Status: {status}")
 
-    async def get_evse_id(self, protocol: Protocol) -> str:
+    async def get_evse_id(self, protocol: Protocol, sdp_port:int = None) -> str:
         if protocol == Protocol.DIN_SPEC_70121:
             #  To transform a string-based DIN SPEC 91286 EVSE ID to hexBinary
             #  representation and vice versa, the following conversion rules shall
@@ -283,8 +283,10 @@ class SimEVSEController(EVSEControllerInterface):
             self.ip_address = ip_address_assign()
             #return self.ip_address
         base_id = "PT123E"
-        #last_segment = int(self.ip_address.split('.')[-1])
-        last_segment = randint(1,254)
+        if sdp_port:
+            last_segment = sdp_port
+        else:
+            last_segment = int(self.ip_address.split('.')[-1])
         evse_id = base_id + str(last_segment)
         return evse_id
 

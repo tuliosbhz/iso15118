@@ -43,11 +43,11 @@ class SECCHandler(CommunicationSessionHandler):
         else:
             logger.error("The comm_sessions dictionary is empty.")
 
-    async def start(self, iface: str, start_udp_server: Optional[bool] = True):
+    async def start(self, iface: str, start_udp_server: Optional[bool] = True, sdp_custom_port: Optional[int] = None):
         try:
             logger.info(f"Starting 15118 version: {__version__}")
             self.get_current_state()
-            await self.start_session_handler(iface, start_udp_server)
+            await self.start_session_handler(iface, start_udp_server, sdp_custom_port)
         except Exception as exc:
             logger.error(f"SECC terminated: {exc}")
             # Re-raise so the process ends with a non-zero exit code and the

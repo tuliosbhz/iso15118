@@ -20,15 +20,17 @@ class EVCCHandler(CommunicationSessionHandler):
         iface: str,
         exi_codec: IEXICodec,
         ev_controller: EVControllerInterface,
+        secc_sdp_port: int
     ):
         CommunicationSessionHandler.__init__(
             self, evcc_config, iface, exi_codec, ev_controller
         )
+        self.sdp_port = secc_sdp_port
 
     async def start(self):
         try:
             logger.info(f"Starting 15118 version: {__version__}")
-            await self.start_session_handler()
+            await self.start_session_handler(secc_custom_sdp_port=self.sdp_port)
         except Exception as exc:
             logger.error(f"EVCC terminated: {exc}")
             # Re-raise so the process ends with a non-zero exit code and the

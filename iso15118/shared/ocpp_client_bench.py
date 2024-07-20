@@ -23,7 +23,7 @@ from ocpp.routing import on, after
 from ocpp.v201 import ChargePoint as cp
 from ocpp.v201 import call, call_result
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)
 
 class ChargePoint(cp):
     def __init__(self, charge_point_id, websocket):
@@ -72,7 +72,7 @@ class ChargePoint(cp):
 
         # Initialize file for benchmarks
         current_time = datetime.now().strftime("%m-%d-%Y")
-        self.benchmark_file = f"client_benchmarks_{current_time}.csv"
+        self.benchmark_file = f"client_exp_data_for_evse_id_{self.cp_id}_on_{current_time}.csv"
         with open(self.benchmark_file, mode='w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(["Timestamp", "Message", "Latency","Throughput", "CPU_Usage", "Memory_Usage", "TransactionID", "EVSEID", "CPID", "Interval", "CSMSAddress"])
@@ -248,11 +248,17 @@ class ChargePoint(cp):
             total_size = sys.getsizeof(request) + sys.getsizeof(response)
             self.record_benchmark("NotifyEVChargingNeeds", start_time, end_time, total_size)
             await asyncio.sleep(1)
-
+            self.start_time_on_set_charging_profile = time.time()
             return response
     
     @on("SetChargingProfile")
     def on_set_charging_profile(self, evse_id, charging_profile):
+        self.end_time_on_set_charging_profile = time.time()
+        total_size = sys.getsizeof(evse_id) + sys.getsizeof(charging_profile)
+        self.record_benchmark("SetChargingProfile", 
+                              self.start_time_on_set_charging_profile, 
+                              self.end_time_on_set_charging_profile, 
+                              total_size)
         logging.info(f"Received charging profile from CSMS; {charging_profile}")
         if evse_id == self.evse_id:
             self.charging_profile = charging_profile

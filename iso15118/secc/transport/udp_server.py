@@ -39,16 +39,17 @@ class UDPServer(asyncio.DatagramProtocol):
     https://docs.python.org/3/library/asyncio-protocol.html
     """
 
-    def __init__(self, session_handler_queue: asyncio.Queue, iface: str):
+    def __init__(self, session_handler_queue: asyncio.Queue, iface: str, secc_custom_sdp_port:Optional[int] = None):
         self.started: bool = False
         self.iface = iface
         self._session_handler_queue: asyncio.Queue = session_handler_queue
         self._rcv_queue: asyncio.Queue = asyncio.Queue()
         self._transport: Optional[DatagramTransport] = None
         self.pause_server: bool = False
+        self.secc_sdp_port = SDP_SERVER_PORT if not secc_custom_sdp_port else secc_custom_sdp_port
 
     @staticmethod
-    async def _create_socket(iface: str) -> socket.socket:
+    async def _create_socket(iface: str, secc_custom_sdp_port:int = None) -> socket.socket:
         """
         This method is necessary because Python does not allow
         async def __init__.
@@ -70,7 +71,7 @@ class UDPServer(asyncio.DatagramProtocol):
         # https://djangocas.dev/blog/linux/linux-SO_BINDTODEVICE-and-mac-IP_BOUND_IF-to-bind-socket-to-a-network-interface/ # noqa
         # https://linux.die.net/man/7/socket
         # https://stackoverflow.com/questions/20616029/os-x-equivalent-of-so-bindtodevice # noqa
-        sdp_server_port = SDP_SERVER_PORT + randint(1,10) #Added by Tulio: + randint(1,30), iface)
+        sdp_server_port = SDP_SERVER_PORT if not secc_custom_sdp_port else secc_custom_sdp_port
         if platform == "darwin":
             full_ipv6_address = await get_link_local_full_addr(sdp_server_port, iface) 
             sock.bind(full_ipv6_address)
@@ -119,13 +120,13 @@ class UDPServer(asyncio.DatagramProtocol):
             # DatagramTransport is a subclass of BaseTransport,
             # which is not recognized by mypy
             lambda: self,
-            sock=await self._create_socket(self.iface),
+            sock=await self._create_socket(self.iface, self.secc_sdp_port),
         )
 
         logger.info(
             "UDP server started at address "
             f"{SDP_MULTICAST_GROUP}%{self.iface} "
-            f"and port {SDP_SERVER_PORT}"
+            f"and port {self.secc_sdp_port}"
         )
         ready_event.set()
         tasks = [self.rcv_task()]

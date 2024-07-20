@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import sys
 
 from iso15118.secc import SECCHandler
 from iso15118.secc.controller.interface import ServiceStatus
@@ -23,14 +24,20 @@ async def main():
             config.load_envs()
             config.print_settings()
 
+            if len(sys.argv) > 1:
+                secc_custom_sdp_port = int(sys.argv[1])
+                logging.info(f"SECC_SDP_PORT {secc_custom_sdp_port}")
+            else: 
+                secc_custom_sdp_port = None
+
             sim_evse_controller = SimEVSEController()
             #Task to execute inside the OCPP client
             await sim_evse_controller.set_status(ServiceStatus.STARTING)
             await SECCHandler(
                 exi_codec=ExificientEXICodec(),
                 evse_controller=sim_evse_controller,
-                config=config,
-            ).start(config.iface)
+                config=config
+            ).start(config.iface, sdp_custom_port=secc_custom_sdp_port)
         except Exception as e:
             logging.error(e)
             await asyncio.sleep(1)

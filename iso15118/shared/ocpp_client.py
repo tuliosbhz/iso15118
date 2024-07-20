@@ -32,7 +32,7 @@ from iso15118.shared.find_ip_addr import ip_address_assign
 
 #logger = logging.getLogger(__name__)
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)
 
 class ChargePoint(cp):
 

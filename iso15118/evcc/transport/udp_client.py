@@ -33,13 +33,14 @@ class UDPClient(DatagramProtocol):
     https://docs.python.org/3/library/asyncio-protocol.html
     """
 
-    def __init__(self, session_handler_queue: asyncio.Queue, iface: str):
+    def __init__(self, session_handler_queue: asyncio.Queue, iface: str, secc_custom_sdp_port:int = None):
         self._session_handler_queue: asyncio.Queue = session_handler_queue
         # Indication whether or not the UDP client connection is open or closed
         self.started: bool = False
         self._rcv_queue: asyncio.Queue = asyncio.Queue()
         self._transport: Optional[DatagramTransport] = None
         self.iface = iface
+        self.secc_sdp_port = SDP_SERVER_PORT if not secc_custom_sdp_port else secc_custom_sdp_port
 
     @staticmethod
     def _create_socket(iface: str) -> socket.socket:
@@ -165,7 +166,7 @@ class UDPClient(DatagramProtocol):
         until the time expires? We have to test that
         """
         self._transport.sendto(
-            message.to_bytes(), (SDP_MULTICAST_GROUP, SDP_SERVER_PORT + randint(1,30))#Added by Tulio: + randint(1,30))
+            message.to_bytes(), (SDP_MULTICAST_GROUP, self.secc_sdp_port) #SDP_SERVER_PORT)
         )
 
         logger.debug(f"Message sent: {message}")

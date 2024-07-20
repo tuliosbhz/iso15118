@@ -132,7 +132,7 @@ class EVSEControllerInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_evse_id(self, protocol: Protocol) -> str:
+    async def get_evse_id(self, protocol: Protocol, sdp_port: int = None) -> str:
         """
         Gets the ID of the EVSE (Electric Vehicle Supply Equipment), which is
         controlling the energy flow to the connector the EV is plugged into.

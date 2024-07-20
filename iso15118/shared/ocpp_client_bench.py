@@ -28,7 +28,7 @@ logging.basicConfig(level=logging.ERROR)
 class ChargePoint(cp):
     def __init__(self, charge_point_id, websocket):
         super(cp, self).__init__(charge_point_id, websocket)
-        self.experiment = False #Set to TRUE to execute experiments on real the EVSEs
+        self.experiment = True #Set to TRUE to execute experiments on real the EVSEs
 
         self.cp_id = charge_point_id
         self.my_address = ip_address_assign()

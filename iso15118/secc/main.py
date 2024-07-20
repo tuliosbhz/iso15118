@@ -17,28 +17,35 @@ async def main():
     Entrypoint function that starts the ISO 15118 code running on
     the SECC (Supply Equipment Communication Controller)
     """
+    try:
+     #To execute on __init__ function of OCPP client
+        config = Config()
+        config.load_envs()
+        config.print_settings()
+
+        if len(sys.argv) > 1:
+            secc_custom_sdp_port = int(sys.argv[1])
+            logging.info(f"SECC_SDP_PORT {secc_custom_sdp_port}")
+        else: 
+            secc_custom_sdp_port = None
+
+        sim_evse_controller = SimEVSEController()
+        exi_codec_obj = ExificientEXICodec()
+
+    except Exception as e:
+        logging.error(e)
+        await asyncio.sleep(1)
     while True:
         try:
-            #To execute on __init__ function of OCPP client
-            config = Config()
-            config.load_envs()
-            config.print_settings()
-
-            if len(sys.argv) > 1:
-                secc_custom_sdp_port = int(sys.argv[1])
-                logging.info(f"SECC_SDP_PORT {secc_custom_sdp_port}")
-            else: 
-                secc_custom_sdp_port = None
-
-            sim_evse_controller = SimEVSEController()
             #Task to execute inside the OCPP client
             await sim_evse_controller.set_status(ServiceStatus.STARTING)
             await SECCHandler(
-                exi_codec=ExificientEXICodec(),
+                exi_codec=exi_codec_obj,
                 evse_controller=sim_evse_controller,
                 config=config
             ).start(config.iface, sdp_custom_port=secc_custom_sdp_port)
         except Exception as e:
+            exi_codec_obj.reset_gateway()
             logging.error(e)
             await asyncio.sleep(1)
 

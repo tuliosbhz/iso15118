@@ -28,6 +28,7 @@ async def main():
                 config.ev_config_file_path = ev_config_file_path
         
         evcc_config = await load_from_file(config.ev_config_file_path)
+        exi_codec_obj = ExificientEXICodec()
 
         if len(sys.argv) > 2:
             secc_custom_sdp_port = int(sys.argv[2])
@@ -38,9 +39,7 @@ async def main():
         logging.error(e)
         await asyncio.sleep(2)
     while True:
-        
         try:
-            exi_codec_obj = ExificientEXICodec()
             await EVCCHandler(
                 evcc_config=evcc_config,
                 iface=config.iface,
@@ -51,9 +50,9 @@ async def main():
             arrival_rate = 0.001
             inter_arrival_inter = simulate_next_ev_arrival(arrival_rate)
             logging.info(f"EVCCsim: Waiting for the next vehicle to plugin in {inter_arrival_inter} s")
-            exi_codec_obj.stop_gateway() #To avoid acumulation on memory RAM
             await asyncio.sleep(inter_arrival_inter)
         except Exception as e:
+            exi_codec_obj.reset_gateway() #To avoid acumulation on memory RAM
             logging.error(e)
             await asyncio.sleep(2)
 

@@ -37,13 +37,14 @@ async def main():
         await asyncio.sleep(1)
     while True:
         try:
-            #Task to execute inside the OCPP client
-            await sim_evse_controller.set_status(ServiceStatus.STARTING)
-            await SECCHandler(
+            secc_handler_obj = SECCHandler(
                 exi_codec=exi_codec_obj,
                 evse_controller=sim_evse_controller,
                 config=config
-            ).start(config.iface, sdp_custom_port=secc_custom_sdp_port)
+            )
+            #Task to execute inside the OCPP client
+            await sim_evse_controller.set_status(ServiceStatus.STARTING)
+            await secc_handler_obj.start(config.iface, sdp_custom_port=secc_custom_sdp_port)
         except Exception as e:
             exi_codec_obj.reset_gateway()
             logging.error(e)

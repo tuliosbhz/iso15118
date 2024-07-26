@@ -7,6 +7,7 @@ from datetime import datetime
 import uuid
 from iso15118.shared.find_ip_addr import ip_address_assign
 import sys
+import json
 
 try:
     import websockets
@@ -23,7 +24,25 @@ from ocpp.routing import on, after
 from ocpp.v201 import ChargePoint as cp
 from ocpp.v201 import call, call_result
 
+from dataclasses import is_dataclass
+
 logging.basicConfig(level=logging.ERROR)
+
+def get_dataclass_size(obj):
+    """Recursively calculates the size of a dataclass instance."""
+    size = sys.getsizeof(obj)
+    # Check if it's a dataclass instance before proceeding
+    if is_dataclass(obj):
+        for field in obj.__dataclass_fields__.values():
+            attr = getattr(obj, field.name)
+            if isinstance(attr, (list, dict)):
+                size += sum(get_dataclass_size(x) for x in attr)
+            elif is_dataclass(attr):  # Recursive call for nested dataclasses
+                size += get_dataclass_size(attr)
+            else:
+                size += sys.getsizeof(attr)
+
+    return size
 
 class ChargePoint(cp):
     def __init__(self, charge_point_id, websocket):
@@ -62,6 +81,8 @@ class ChargePoint(cp):
         self.evMaxVoltage = None
     
         self.charging_profile = None
+        self.start_time_on_set_charging_profile = 0
+        self.end_time_on_set_charging_profile = 0
         
 
         # Initialize IP generator base values
@@ -105,7 +126,7 @@ class ChargePoint(cp):
     #Calculate throughput
     """
         #First calculate the total size of the message exchanged
-        msg_size = sys.getsizeof(json.dumps(request)) + sys.getsizeof(json.dumps(response))
+        msg_size = sys.getsizeof(get_dataclass_size(ocpp_request)) + sys.getsizeof(get_dataclass_size(response))
         #Pickup the total latency of the round trip time of the message
         latency = end_time - start_time
         #Calculate the throughput
@@ -125,13 +146,13 @@ class ChargePoint(cp):
 
     async def send_boot_notification(self):
         start_time = time.time()
-        request = call.BootNotification(
+        ocpp_request =  call.BootNotification(
             charging_station={"model": "Wallbox INESCTEC_TLO", "vendor_name": "INESCTEC"},
             reason="PowerUp",
         )
-        response = await self.call(request)
+        response = await self.call(ocpp_request)
         end_time = time.time()
-        total_size = sys.getsizeof(request) + sys.getsizeof(response)
+        total_size = sys.getsizeof(get_dataclass_size(ocpp_request)) + sys.getsizeof(get_dataclass_size(response))
         self.record_benchmark("BootNotification", start_time,end_time,total_size)
 
         self._heartbeat_interval = response.interval
@@ -150,7 +171,7 @@ class ChargePoint(cp):
             start_time = time.time()
             ocpp_response = await self.call(ocpp_request)
             end_time = time.time()
-            total_size = sys.getsizeof(ocpp_request) + sys.getsizeof(ocpp_response)
+            total_size = sys.getsizeof(get_dataclass_size(ocpp_request)) + sys.getsizeof(get_dataclass_size(ocpp_response))
             self.record_benchmark("Heartbeat", start_time, end_time, total_size)
             await asyncio.sleep(interval)
 
@@ -179,7 +200,7 @@ class ChargePoint(cp):
         else:
             ocpp_request = None
         end_time = time.time()
-        total_size = sys.getsizeof(ocpp_request) + sys.getsizeof(ocpp_response)
+        total_size = sys.getsizeof(get_dataclass_size(ocpp_request)) + sys.getsizeof(get_dataclass_size(ocpp_response))
         self.record_benchmark("TransactionEvent", start_time, end_time, total_size)
 
     async def send_status_notification(self):
@@ -201,7 +222,7 @@ class ChargePoint(cp):
         else:
             ocpp_request = None
         end_time = time.time()
-        total_size = sys.getsizeof(ocpp_request) + sys.getsizeof(response)
+        total_size = sys.getsizeof(get_dataclass_size(ocpp_request)) + sys.getsizeof(get_dataclass_size(response))
         self.record_benchmark("StatusNotification", start_time, end_time, total_size)
 
     async def send_authorize(self):
@@ -209,7 +230,7 @@ class ChargePoint(cp):
         ocpp_request = call.Authorize(id_token={"idToken": str(self.id_token), "type": self.id_token_type})
         response = await self.call(ocpp_request)
         end_time = time.time()
-        total_size = sys.getsizeof(ocpp_request) + sys.getsizeof(response)
+        total_size = sys.getsizeof(get_dataclass_size(ocpp_request)) + sys.getsizeof(get_dataclass_size(response))
         self.record_benchmark("Authorize", start_time, end_time, total_size)
         if response.id_token_info['status'] == 'Accepted':
             self._session_authorized = True
@@ -236,16 +257,16 @@ class ChargePoint(cp):
                                     'evMinCurrent': int(self.evMinCurrent),
                                     'evMaxCurrent': int(self.evMaxCurrent),
                                     'evMaxVoltage': int(self.evMaxVoltage)}
-            request = call.NotifyEVChargingNeeds(
+            ocpp_request =  call.NotifyEVChargingNeeds(
                 charging_needs={'requestedEnergyTransfer': requestedEnergyTransfer,
                                 'acChargingParameters': acChargingParameters,
                                 'departureTime': str(self.departureTime)},
                 evse_id=self.evse_id,
                 max_schedule_tuples=int(self.max_schedule_tuples))
 
-            response = await self.call(request)
+            response = await self.call(ocpp_request)
             end_time = time.time()
-            total_size = sys.getsizeof(request) + sys.getsizeof(response)
+            total_size = sys.getsizeof(get_dataclass_size(ocpp_request)) + sys.getsizeof(get_dataclass_size(response))
             self.record_benchmark("NotifyEVChargingNeeds", start_time, end_time, total_size)
             await asyncio.sleep(1)
             self.start_time_on_set_charging_profile = time.time()
@@ -254,11 +275,13 @@ class ChargePoint(cp):
     @on("SetChargingProfile")
     def on_set_charging_profile(self, evse_id, charging_profile):
         self.end_time_on_set_charging_profile = time.time()
-        total_size = sys.getsizeof(evse_id) + sys.getsizeof(charging_profile)
+        total_size = sys.getsizeof(json.dumps(evse_id)) + sys.getsizeof(json.dumps(charging_profile))
+        """ 
         self.record_benchmark("SetChargingProfile", 
                               self.start_time_on_set_charging_profile, 
                               self.end_time_on_set_charging_profile, 
                               total_size)
+        """
         logging.info(f"Received charging profile from CSMS; {charging_profile}")
         if evse_id == self.evse_id:
             self.charging_profile = charging_profile

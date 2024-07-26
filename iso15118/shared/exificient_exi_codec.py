@@ -24,7 +24,12 @@ class ExificientEXICodec(IEXICodec):
         port = launch_gateway(
             classpath=JAR_FILE_PATH,
             die_on_exit=True,
-            javaopts=["--add-opens", "java.base/java.lang=ALL-UNNAMED"]
+            javaopts=["--add-opens", "java.base/java.lang=ALL-UNNAMED", 
+                        "-Xms128m", 
+                        "-Xmx256m",
+                        "-XX:MaxMetaspaceSize=128m",    # Maximum metaspace size
+                        "-XX:MaxDirectMemorySize=128m",  # Maximum direct memory size
+                    ]
         )
         return JavaGateway(gateway_parameters=GatewayParameters(port=port))
 

@@ -8,6 +8,7 @@ from iso15118.shared.exceptions import (
     NoSupportedProtocols,
 )
 from iso15118.shared.messages.enums import AuthEnum, Protocol, ServiceV20
+import gc
 
 logger = logging.getLogger(__name__)
 
@@ -124,5 +125,6 @@ async def wait_for_tasks(
     for done_task in done:
         try:
             done_task.result()
+            gc.collect()
         except Exception as e:
             logger.exception(e)
